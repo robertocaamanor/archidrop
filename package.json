@@ -1,0 +1,17 @@
+{
+  "name": "descomprimir",
+  "version": "1.0.0",
+  "main": "procesarArchivos.js",
+  "scripts": {
+    "start": "node procesarArchivos.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "dotenv": "^17.2.1",
+    "prompt-sync": "^4.2.0"
+  }
+}

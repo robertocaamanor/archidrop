@@ -33,9 +33,27 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const prompt = require('prompt-sync')({sigint: true});
 
-require('dotenv').config();
-const HOME = process.env.HOME || process.env.USERPROFILE || process.cwd();
-const DROPBOX = path.join(process.env.USERPROFILE || process.env.HOME, 'Dropbox', 'Archivos');
+// Cargar .env desde la ruta del script
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Forzar que HOME siempre sea el valor del archivo .env
+let HOME = (require('fs').readFileSync(path.join(__dirname, '.env'), 'utf8')
+  .split(/\r?\n/)
+  .find(line => line.startsWith('HOME=')) || '').replace('HOME=', '').trim();
+if (!HOME) HOME = process.cwd();
+if (!path.isAbsolute(HOME)) {
+  HOME = path.resolve(__dirname, HOME);
+}
+const DROPBOX = path.join(process.env.USERPROFILE || process.env.HOME || __dirname, 'Dropbox', 'Archivos');
+
+
+// Diagnóstico de la ruta HOME
+console.log(`Ruta HOME utilizada: ${HOME}`);
+if (!fs.existsSync(HOME)) {
+  console.error(`La carpeta HOME no existe: ${HOME}`);
+  prompt('Presione Enter para salir...');
+  process.exit(1);
+}
+prompt('Presione Enter para continuar...');
 
 const MONTHS = [
   { num: 1, word: 'enero', name: '01 - Enero' },

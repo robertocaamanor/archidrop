@@ -14,7 +14,15 @@ Este proyecto permite organizar y descomprimir archivos exportados desde el celu
 
 ## Uso
 
-1. Configura el archivo `.env` con la variable `HOME` apuntando a la carpeta donde están tus archivos exportados.
+1. Configura el archivo `.env` con los siguientes parámetros:
+
+
+```properties
+USERPROFILE=C:\Users\TuUsuario
+HOME=C:\Users\TuUsuario\Downloads\CarpetaExportada
+```
+
+La variable `HOME` debe apuntar a la carpeta donde están tus archivos exportados.
 2. Ejecuta el script con `npm start` o `node procesarArchivos.js`.
 3. Sigue las instrucciones en pantalla para organizar tus archivos en Dropbox.
 

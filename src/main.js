@@ -11,7 +11,7 @@ if (!HOME) HOME = process.cwd();
 if (!path.isAbsolute(HOME)) {
   HOME = path.resolve(__dirname, HOME);
 }
-const DROPBOX = path.join(process.env.USERPROFILE || process.env.HOME || __dirname, '../Dropbox', 'Archivos');
+const DROPBOX = path.join(process.env.USERPROFILE, 'Dropbox', 'Archivos');
 
 const MONTHS = [
   { num: 1, word: 'enero', name: '01 - Enero' },

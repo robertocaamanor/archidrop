@@ -7,6 +7,9 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 let HOME = (require('fs').readFileSync(path.join(__dirname, '../.env'), 'utf8')
   .split(/\r?\n/)
   .find(line => line.startsWith('HOME=')) || '').replace('HOME=', '').trim();
+if (HOME.includes('${USERPROFILE}')) {
+  HOME = HOME.replace('${USERPROFILE}', process.env.USERPROFILE);
+}
 if (!HOME) HOME = process.cwd();
 if (!path.isAbsolute(HOME)) {
   HOME = path.resolve(__dirname, HOME);

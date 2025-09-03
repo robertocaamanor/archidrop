@@ -17,9 +17,10 @@ Este proyecto permite organizar y descomprimir archivos exportados desde el celu
 1. Configura el archivo `.env` con los siguientes parámetros:
 
 
+
 ```properties
 USERPROFILE=C:\Users\TuUsuario
-HOME=C:\Users\TuUsuario\Downloads\CarpetaExportada
+HOME=${USERPROFILE}\Downloads\CarpetaExportada
 ```
 
 La variable `HOME` debe apuntar a la carpeta donde están tus archivos exportados.

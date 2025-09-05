@@ -45,24 +45,47 @@ if (!fs.existsSync(HOME)) {
 
 // Función para parsear información de fecha del nombre
 function parseFileInfo(name) {
-  // Patrón: "Diario - [día] de [mes] de [año]"
-  const datePattern = /(.+?)\s*-\s*(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i;
-  const match = name.match(datePattern);
+  // Patrón 1: "Diario - [día] de [mes] de [año]"
+  const datePattern1 = /(.+?)\s*-\s*(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i;
+  // Patrón 2: "Diario - [mes] [año]"
+  const datePattern2 = /(.+?)\s*-\s*(\w+)\s+(\d{4})/i;
   
-  if (!match) return null;
+  const match1 = name.match(datePattern1);
+  const match2 = name.match(datePattern2);
   
-  const [, diario, dia, mesTexto, year] = match;
-  const monthObj = MONTHS.find(m => m.word.toLowerCase() === mesTexto.toLowerCase());
+  if (match1) {
+    // Formato: "La Tercera - 1 de septiembre de 1995"
+    const [, diario, dia, mesTexto, year] = match1;
+    const monthObj = MONTHS.find(m => m.word.toLowerCase() === mesTexto.toLowerCase());
+    
+    if (!monthObj) return null;
+    
+    return {
+      diario: diario.trim(),
+      dia: parseInt(dia),
+      mes: monthObj,
+      year: parseInt(year),
+      fullDate: `${dia} de ${mesTexto} de ${year}`,
+      format: 'completo'
+    };
+  } else if (match2) {
+    // Formato: "Hombre - Septiembre 2005"
+    const [, diario, mesTexto, year] = match2;
+    const monthObj = MONTHS.find(m => m.word.toLowerCase() === mesTexto.toLowerCase());
+    
+    if (!monthObj) return null;
+    
+    return {
+      diario: diario.trim(),
+      dia: null, // No hay día específico
+      mes: monthObj,
+      year: parseInt(year),
+      fullDate: `${mesTexto} ${year}`,
+      format: 'mes-año'
+    };
+  }
   
-  if (!monthObj) return null;
-  
-  return {
-    diario: diario.trim(),
-    dia: parseInt(dia),
-    mes: monthObj,
-    year: parseInt(year),
-    fullDate: `${dia} de ${mesTexto} de ${year}`
-  };
+  return null;
 }
 
 // Función unificada para buscar archivos y carpetas
@@ -164,8 +187,9 @@ function main() {
           const items = groupedItems[year][month][diario];
           console.log(`    📰 ${diario}:`);
           items.forEach(item => {
-            const icon = item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.zip') ? '📦' : '📄');
-            console.log(`      ${icon} ${item.name}`);
+            const icon = item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.zip') ? '📦' : (item.name.toLowerCase().endsWith('.rar') ? '�' : '�📄'));
+            const formatInfo = item.info.format === 'completo' ? ` (${item.info.dia} de ${item.info.mes.word})` : ` (${item.info.mes.word})`;
+            console.log(`      ${icon} ${item.name}${formatInfo}`);
           });
         });
       });

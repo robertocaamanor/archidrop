@@ -2,48 +2,76 @@
 
 Este proyecto permite organizar y descomprimir archivos exportados desde el celular al PC, moviéndolos automáticamente a Dropbox usando NodeJS.
 
-## ¿Qué hace el script `procesarArchivos.js`?
+## Nueva Funcionalidad - Búsqueda Automática Unificada
 
-- Busca archivos ZIP, JPEG y carpetas dentro de la ruta definida en el archivo `.env` (`HOME`).
-- Permite elegir si quieres procesar archivos comprimidos (ZIP/JPEG) o carpetas.
-- Filtra por año y mes, mostrando solo los archivos o carpetas que coinciden con la fecha seleccionada.
-- Descomprime los archivos ZIP y mueve los archivos JPEG directamente a Dropbox, organizando por año, mes y nombre del diario.
-- Si eliges carpetas, mueve el contenido de todas las carpetas que coincidan con el año y mes seleccionados a la carpeta correspondiente en Dropbox, sin crear subcarpetas por día.
-- Evita duplicados agregando sufijos si el archivo ya existe en destino.
-- Todo el proceso es interactivo y se repite hasta que el usuario decida salir.
+El script ahora busca automáticamente archivos y carpetas con el formato específico sin necesidad de preguntas al usuario.
+
+### ¿Qué hace el script `src/main.js`?
+
+- **Búsqueda automática**: Busca archivos y carpetas con el formato `"Diario - día de mes de año"`
+- **Unificada**: Procesa tanto archivos (ZIP, JPEG, RAR) como carpetas en una sola ejecución
+- **Organización inteligente**: Agrupa automáticamente por año, mes y diario
+- **Vista previa**: Muestra una lista organizada de todos los elementos encontrados
+- **Confirmación simple**: Solo pregunta si desea procesar y mover a Dropbox
+
+### Formatos soportados
+- **Archivos ZIP**: Se descomprimen automáticamente
+- **Archivos JPEG**: Se mueven directamente
+- **Archivos RAR**: Se mueven sin descomprimir (con aviso)
+- **Carpetas**: Se mueve todo el contenido
+
+### Estructura de organización
+```
+Dropbox/Archivos/
+├── 1995/
+│   └── 09 - Septiembre/
+│       └── La Tercera/
+│           ├── archivo1.jpg
+│           ├── archivo2.pdf
+│           └── ...
+└── 1997/
+    └── 09 - Septiembre/
+        └── La Tercera/
+            └── ...
+```
 
 ## Uso
 
-1. Configura el archivo `.env` con los siguientes parámetros:
-
-
+1. Configura el archivo `.env`:
 
 ```properties
 USERPROFILE=C:\Users\TuUsuario
-HOME=${USERPROFILE}\Downloads\CarpetaExportada
+HOME=${USERPROFILE}\Downloads\Phone Link
 ```
 
-La variable `HOME` debe apuntar a la carpeta donde están tus archivos exportados.
-2. Ejecuta el script con `npm start` o `node procesarArchivos.js`.
-3. Sigue las instrucciones en pantalla para organizar tus archivos en Dropbox.
-
-### Ejemplo de uso
+2. Ejecuta el script:
 
 ```bash
-# Ejecutar el script
 npm start
-
-# Ejemplo de interacción:
-¿Qué desea procesar? (1: Archivos ZIP/JPEG/RAR, 2: Carpetas): 1
-Ingrese el año (ejemplo 1995): 1980
-Seleccione el mes:
-1. Enero
-2. Febrero
-3. Marzo
-...etc
-Ingrese el numero del mes (1-12): 3
-
-# El script mostrará los archivos encontrados y preguntará si deseas procesarlos.
+# o
+node src/main.js
 ```
 
-Puedes repetir el proceso para diferentes fechas y tipos de archivos/carpeta según lo que necesites organizar.
+3. El script automáticamente:
+   - Busca archivos y carpetas con formato válido
+   - Muestra una vista previa organizada
+   - Pregunta si desea procesar los elementos
+   - Organiza todo en Dropbox según año/mes/diario
+
+### Ejemplo de formato válido de archivos/carpetas:
+- `La Tercera - 1 de septiembre de 1995.zip`
+- `El Mercurio - 15 de marzo de 2000.jpg`
+- `Las Últimas Noticias - 25 de diciembre de 1998/` (carpeta)
+
+### Ejemplo de salida:
+```
+=== ELEMENTOS ENCONTRADOS ===
+
+📅 Año 1995:
+  📆 09 - Septiembre:
+    📰 La Tercera:
+      📦 La Tercera - 1 de septiembre de 1995.zip
+      📄 La Tercera - 2 de septiembre de 1995.jpg
+
+¿Desea procesar estos elementos y moverlos a Dropbox? (S/N):
+```

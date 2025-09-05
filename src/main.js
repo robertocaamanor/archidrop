@@ -33,10 +33,8 @@ const MONTHS = [
 
 const moveFolderContents = require('../utils/moveFolderContents');
 const moveFile = require('../utils/moveFile');
-const decompressZip = require('../utils/decompressZip');
+const { decompressFile } = require('../utils/decompressZip');
 const sanitizeName = require('../utils/sanitizeName');
-const findMatchingFiles = require('./findMatchingFiles');
-const findFoldersRecursively = require('./findFoldersRecursively');
 
 console.log(`Ruta HOME utilizada: ${HOME}`);
 if (!fs.existsSync(HOME)) {
@@ -44,91 +42,179 @@ if (!fs.existsSync(HOME)) {
   prompt('Presione Enter para salir...');
   process.exit(1);
 }
-prompt('Presione Enter para continuar...');
+
+// Función para parsear información de fecha del nombre
+function parseFileInfo(name) {
+  // Patrón: "Diario - [día] de [mes] de [año]"
+  const datePattern = /(.+?)\s*-\s*(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i;
+  const match = name.match(datePattern);
+  
+  if (!match) return null;
+  
+  const [, diario, dia, mesTexto, year] = match;
+  const monthObj = MONTHS.find(m => m.word.toLowerCase() === mesTexto.toLowerCase());
+  
+  if (!monthObj) return null;
+  
+  return {
+    diario: diario.trim(),
+    dia: parseInt(dia),
+    mes: monthObj,
+    year: parseInt(year),
+    fullDate: `${dia} de ${mesTexto} de ${year}`
+  };
+}
+
+// Función unificada para buscar archivos y carpetas
+function findMatchingItems(dir, depth = 0, maxDepth = 5) {
+  if (depth > maxDepth) return [];
+  
+  let results = [];
+  let items = [];
+  
+  try {
+    items = fs.readdirSync(dir);
+  } catch (err) {
+    return results;
+  }
+  
+  for (const item of items) {
+    const fullPath = path.join(dir, item);
+    let stat;
+    
+    try {
+      stat = fs.lstatSync(fullPath);
+    } catch (err) {
+      continue;
+    }
+    
+    const fileInfo = parseFileInfo(item);
+    
+    if (stat.isDirectory()) {
+      // Si es carpeta y coincide con el patrón
+      if (fileInfo) {
+        results.push({
+          type: 'folder',
+          path: fullPath,
+          name: item,
+          info: fileInfo
+        });
+      }
+      // Buscar recursivamente en subcarpetas
+      results = results.concat(findMatchingItems(fullPath, depth + 1, maxDepth));
+    } else {
+      // Si es archivo y coincide con el patrón y extensión válida
+      if (fileInfo && /\.(zip|jpg|jpeg|rar)$/i.test(item)) {
+        results.push({
+          type: 'file',
+          path: fullPath,
+          name: item,
+          info: fileInfo
+        });
+      }
+    }
+  }
+  
+  return results;
+}
+
+// Función para agrupar items por año, mes y diario
+function groupItemsByDate(items) {
+  const grouped = {};
+  
+  items.forEach(item => {
+    const { year, mes, diario } = item.info;
+    const yearKey = year.toString();
+    const monthKey = mes.name;
+    const diarioKey = diario;
+    
+    if (!grouped[yearKey]) grouped[yearKey] = {};
+    if (!grouped[yearKey][monthKey]) grouped[yearKey][monthKey] = {};
+    if (!grouped[yearKey][monthKey][diarioKey]) grouped[yearKey][monthKey][diarioKey] = [];
+    
+    grouped[yearKey][monthKey][diarioKey].push(item);
+  });
+  
+  return grouped;
+}
 
 function main() {
   while (true) {
     console.clear();
-    const tipo = prompt('¿Qué desea procesar? (1: Archivos ZIP/JPEG/RAR, 2: Carpetas): ');
-    if (tipo !== '1' && tipo !== '2') {
-      console.log('Opción inválida.');
-      continue;
+    console.log('Buscando archivos y carpetas con formato "Diario - día de mes de año"...\n');
+    
+    const matchedItems = findMatchingItems(HOME);
+    
+    if (matchedItems.length === 0) {
+      console.log('No se encontraron archivos o carpetas con el formato esperado.');
+      prompt('Presione Enter para salir...');
+      break;
     }
-
-    const year = prompt('Ingrese el año (ejemplo 1995): ');
-    if (!/^\d{4}$/.test(year)) {
-      console.log('Año inválido.');
-      continue;
+    
+    // Agrupar por fecha
+    const groupedItems = groupItemsByDate(matchedItems);
+    
+    // Mostrar resumen
+    console.log('=== ELEMENTOS ENCONTRADOS ===\n');
+    Object.keys(groupedItems).sort().forEach(year => {
+      console.log(`📅 Año ${year}:`);
+      Object.keys(groupedItems[year]).sort().forEach(month => {
+        console.log(`  📆 ${month}:`);
+        Object.keys(groupedItems[year][month]).sort().forEach(diario => {
+          const items = groupedItems[year][month][diario];
+          console.log(`    📰 ${diario}:`);
+          items.forEach(item => {
+            const icon = item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.zip') ? '📦' : '📄');
+            console.log(`      ${icon} ${item.name}`);
+          });
+        });
+      });
+      console.log('');
+    });
+    
+    const shouldProcess = prompt('¿Desea procesar estos elementos y moverlos a Dropbox? (S/N): ').toLowerCase();
+    if (shouldProcess !== 's') {
+      console.log('Proceso cancelado.');
+      break;
     }
-
-    console.log('Seleccione el mes:');
-    MONTHS.forEach(m => console.log(`${m.num}. ${m.name.split(' - ')[1]}`));
-    const monthNum = parseInt(prompt('Ingrese el numero del mes (1-12): '), 10);
-    const monthObj = MONTHS.find(m => m.num === monthNum);
-    if (!monthObj) {
-      console.log('Mes inválido.');
-      continue;
-    }
-
-    if (tipo === '1') {
-      const matchedFiles = findMatchingFiles(HOME, year, monthObj.word);
-      if (matchedFiles.length === 0) {
-        console.log(`No se encontraron archivos para ${monthObj.word} ${year}.`);
-        prompt('Presione Enter para continuar...');
-        continue;
-      }
-
-      console.log(`\n=== Vista previa de archivos que coinciden con "${monthObj.word} ${year}" ===`);
-      matchedFiles.forEach(f => console.log('  ' + f));
-
-      const resp = prompt(`\n¿Desea procesar estos archivos en ${HOME}? (S/N): `).toLowerCase();
-      if (resp !== 's') {
-        console.log('Proceso cancelado.');
-        break;
-      }
-
-      for (const filePath of matchedFiles) {
-        const baseName = path.parse(filePath).name;
-        const diario = baseName.split(' - ')[0];
-        const safeDiario = sanitizeName(diario);
-        const diarioDir = path.join(DROPBOX, year, monthObj.name, safeDiario);
-        if (!fs.existsSync(diarioDir)) fs.mkdirSync(diarioDir, { recursive: true });
-
-        if (/\.zip$/i.test(filePath)) {
-          decompressZip(filePath, diarioDir);
-        } else {
-          moveFile(filePath, diarioDir);
-        }
-      }
-    } else if (tipo === '2') {
-      const folders = findFoldersRecursively(HOME, year, monthObj.word);
-      if (folders.length === 0) {
-        console.log(`No se encontraron carpetas para ${monthObj.word} ${year}.`);
-        prompt('Presione Enter para continuar...');
-        continue;
-      }
-
-      console.log(`\n=== Carpetas que coinciden con "${monthObj.word} ${year}" ===`);
-      folders.forEach(f => console.log('  ' + f));
-
-      const resp = prompt(`\n¿Desea mover el contenido de estas carpetas al Dropbox? (S/N): `).toLowerCase();
-      if (resp !== 's') {
-        console.log('Proceso cancelado.');
-        break;
-      }
-
-      for (const folderPath of folders) {
-        const folderName = path.basename(folderPath);
-        const diario = folderName.split(' - ')[0];
-        const safeDiario = sanitizeName(diario);
-        const diarioDir = path.join(DROPBOX, year, monthObj.name, safeDiario);
-        moveFolderContents(folderPath, diarioDir);
-      }
-    }
-
-    console.log('\n=== Proceso finalizado ===');
-    const otra = prompt('\n¿Desea procesar otra fecha o tipo? (S/N): ').toLowerCase();
-    if (otra !== 's') break;
+    
+    // Procesar cada elemento
+    let processedCount = 0;
+    Object.keys(groupedItems).forEach(year => {
+      Object.keys(groupedItems[year]).forEach(monthName => {
+        Object.keys(groupedItems[year][monthName]).forEach(diario => {
+          const items = groupedItems[year][monthName][diario];
+          const safeDiario = sanitizeName(diario);
+          const targetDir = path.join(DROPBOX, year, monthName, safeDiario);
+          
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+          }
+          
+          items.forEach(item => {
+            console.log(`Procesando: ${item.name}`);
+            
+            if (item.type === 'file') {
+              if (/\.(zip|rar)$/i.test(item.path)) {
+                decompressFile(item.path, targetDir);
+              } else {
+                moveFile(item.path, targetDir);
+              }
+            } else if (item.type === 'folder') {
+              moveFolderContents(item.path, targetDir);
+            }
+            
+            processedCount++;
+          });
+        });
+      });
+    });
+    
+    console.log(`\n=== Proceso finalizado ===`);
+    console.log(`Se procesaron ${processedCount} elementos.`);
+    
+    const continuar = prompt('\n¿Desea buscar nuevamente? (S/N): ').toLowerCase();
+    if (continuar !== 's') break;
   }
 }
 

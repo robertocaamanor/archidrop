@@ -4,16 +4,33 @@ const AdmZip = require('adm-zip');
 const prompt = require('prompt-sync')({sigint: true});
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-let HOME = (require('fs').readFileSync(path.join(__dirname, '../.env'), 'utf8')
-  .split(/\r?\n/)
-  .find(line => line.startsWith('HOME=')) || '').replace('HOME=', '').trim();
+const envContent = require('fs').readFileSync(path.join(__dirname, '../.env'), 'utf8');
+
+let HOME = (envContent.split(/\r?\n/).find(line => line.startsWith('HOME=')) || '').replace('HOME=', '').trim();
+let DROPBOX_SOURCE = (envContent.split(/\r?\n/).find(line => line.startsWith('DROPBOX_SOURCE=')) || '').replace('DROPBOX_SOURCE=', '').trim();
+
+// Procesar variables con ${USERPROFILE}
 if (HOME.includes('${USERPROFILE}')) {
   HOME = HOME.replace('${USERPROFILE}', process.env.USERPROFILE);
 }
+if (DROPBOX_SOURCE.includes('${USERPROFILE}')) {
+  DROPBOX_SOURCE = DROPBOX_SOURCE.replace('${USERPROFILE}', process.env.USERPROFILE);
+}
+
+// Valores por defecto
 if (!HOME) HOME = process.cwd();
+if (!DROPBOX_SOURCE) DROPBOX_SOURCE = path.join(process.env.USERPROFILE, 'Dropbox');
+
+// Asegurar rutas absolutas
 if (!path.isAbsolute(HOME)) {
   HOME = path.resolve(__dirname, HOME);
 }
+if (!path.isAbsolute(DROPBOX_SOURCE)) {
+  DROPBOX_SOURCE = path.resolve(__dirname, DROPBOX_SOURCE);
+}
+
+// Carpetas de búsqueda y destino
+const SEARCH_FOLDERS = [HOME, DROPBOX_SOURCE];
 const DROPBOX = path.join(process.env.USERPROFILE, 'Dropbox', 'Archivos');
 
 const MONTHS = [
@@ -36,9 +53,19 @@ const moveFile = require('../utils/moveFile');
 const { decompressFile } = require('../utils/decompressZip');
 const sanitizeName = require('../utils/sanitizeName');
 
-console.log(`Ruta HOME utilizada: ${HOME}`);
-if (!fs.existsSync(HOME)) {
-  console.error(`La carpeta HOME no existe: ${HOME}`);
+console.log('Carpetas de búsqueda configuradas:');
+SEARCH_FOLDERS.forEach(folder => {
+  const exists = fs.existsSync(folder);
+  console.log(`  ${exists ? '✓' : '✗'} ${folder}`);
+  if (!exists) {
+    console.warn(`    Advertencia: La carpeta no existe y será omitida.`);
+  }
+});
+
+// Filtrar solo carpetas existentes
+const validFolders = SEARCH_FOLDERS.filter(folder => fs.existsSync(folder));
+if (validFolders.length === 0) {
+  console.error('No hay carpetas válidas para buscar.');
   prompt('Presione Enter para salir...');
   process.exit(1);
 }
@@ -88,8 +115,8 @@ function parseFileInfo(name) {
   return null;
 }
 
-// Función unificada para buscar archivos y carpetas
-function findMatchingItems(dir, depth = 0, maxDepth = 5) {
+// Función unificada para buscar archivos y carpetas en una carpeta específica
+function findMatchingItemsInFolder(dir, depth = 0, maxDepth = 5, isDropboxSource = false) {
   if (depth > maxDepth) return [];
   
   let results = [];
@@ -120,11 +147,14 @@ function findMatchingItems(dir, depth = 0, maxDepth = 5) {
           type: 'folder',
           path: fullPath,
           name: item,
-          info: fileInfo
+          info: fileInfo,
+          source: dir
         });
       }
-      // Buscar recursivamente en subcarpetas
-      results = results.concat(findMatchingItems(fullPath, depth + 1, maxDepth));
+      // Buscar recursivamente en subcarpetas SOLO si NO es Dropbox source O si es el directorio inicial
+      if (!isDropboxSource || depth === 0) {
+        results = results.concat(findMatchingItemsInFolder(fullPath, depth + 1, maxDepth, isDropboxSource));
+      }
     } else {
       // Si es archivo y coincide con el patrón y extensión válida
       if (fileInfo && /\.(zip|jpg|jpeg|rar)$/i.test(item)) {
@@ -132,13 +162,31 @@ function findMatchingItems(dir, depth = 0, maxDepth = 5) {
           type: 'file',
           path: fullPath,
           name: item,
-          info: fileInfo
+          info: fileInfo,
+          source: dir
         });
       }
     }
   }
   
   return results;
+}
+
+// Función para buscar en múltiples carpetas
+function findMatchingItems() {
+  let allResults = [];
+  
+  validFolders.forEach(folder => {
+    console.log(`Buscando en: ${folder}`);
+    const isDropboxSource = folder === DROPBOX_SOURCE;
+    if (isDropboxSource) {
+      console.log(`  (Solo carpeta principal, sin subcarpetas)`);
+    }
+    const folderResults = findMatchingItemsInFolder(folder, 0, 5, isDropboxSource);
+    allResults = allResults.concat(folderResults);
+  });
+  
+  return allResults;
 }
 
 // Función para agrupar items por año, mes y diario
@@ -166,7 +214,7 @@ function main() {
     console.clear();
     console.log('Buscando archivos y carpetas con formato "Diario - día de mes de año"...\n');
     
-    const matchedItems = findMatchingItems(HOME);
+    const matchedItems = findMatchingItems();
     
     if (matchedItems.length === 0) {
       console.log('No se encontraron archivos o carpetas con el formato esperado.');
@@ -187,9 +235,10 @@ function main() {
           const items = groupedItems[year][month][diario];
           console.log(`    📰 ${diario}:`);
           items.forEach(item => {
-            const icon = item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.zip') ? '📦' : (item.name.toLowerCase().endsWith('.rar') ? '�' : '�📄'));
+            const icon = item.type === 'folder' ? '📁' : (item.name.toLowerCase().endsWith('.zip') ? '📦' : (item.name.toLowerCase().endsWith('.rar') ? '📦' : '📄'));
             const formatInfo = item.info.format === 'completo' ? ` (${item.info.dia} de ${item.info.mes.word})` : ` (${item.info.mes.word})`;
-            console.log(`      ${icon} ${item.name}${formatInfo}`);
+            const sourceFolder = path.basename(item.source);
+            console.log(`      ${icon} ${item.name}${formatInfo} [${sourceFolder}]`);
           });
         });
       });

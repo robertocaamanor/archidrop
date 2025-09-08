@@ -37,14 +37,22 @@ Dropbox/Archivos/
             └── ...
 ```
 
-## Uso
+## Configuración
 
-1. Configura el archivo `.env`:
+Configura el archivo `.env` para definir las carpetas de búsqueda:
 
 ```properties
 USERPROFILE=C:\Users\TuUsuario
 HOME=${USERPROFILE}\Downloads\Phone Link
+DROPBOX_SOURCE=${USERPROFILE}\Dropbox
 ```
+
+### Variables de configuración:
+- **HOME**: Carpeta principal de búsqueda (ej: Phone Link)
+- **DROPBOX_SOURCE**: Carpeta adicional de búsqueda (ej: Dropbox raíz)
+- **USERPROFILE**: Variable del sistema (se reemplaza automáticamente)
+
+## Uso
 
 2. Ejecuta el script:
 
